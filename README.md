@@ -5,6 +5,11 @@
 - scipy
 - tensorboardX
 - ImageMagick
+- Matplotlib
+- transforms3d
+- Easydict
+- Pillow
+
 
 ***
 # データセット作成
@@ -31,7 +36,7 @@ python train.py {PATH_TO_CONFIG_FILE}
 ```
 **例**　
 ```
-python train.py config/MotionGAN/Styled_augfps_step8.py
+python train.py configs/MotionGAN/Styled_augfps_step8.py
 ```
 特定のcheckpoint(.pth.tar)から学習を再開する場合、コマンドラインオプション`--resume`を用いて指定する。
 
