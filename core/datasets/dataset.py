@@ -118,9 +118,9 @@ def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
         label_dict[name] = l
 
     # Prepare skeleton
-    skeleton, non_end_bones, joints_to_index, permute_xyz_order = btoj.get_standard_format(cfg.standard_bvh)
-    _, non_zero_joint_to_index = btoj.cut_zero_length_bone(skeleton, joints_to_index)
-
+    if cfg.standard_bvh is not None:
+        skeleton, non_end_bones, joints_to_index, permute_xyz_order = btoj.get_standard_format(cfg.standard_bvh)
+        _, non_zero_joint_to_index = btoj.cut_zero_length_bone(skeleton, joints_to_index)
 
     # Create data
     for i, npy_path in enumerate(npy_paths):
@@ -144,7 +144,7 @@ def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
         if os.path.exists(data_path):
             with open(data_path, mode='rb') as f:
                 data = pickle.load(f)
-        else:
+        elif cfg.standard_bvh is not None:
             data = create_data_from_npy(cfg, npy_path, data_path, skeleton, joints_to_index)
             if data is None: continue
 
@@ -197,5 +197,26 @@ def create_data_from_npy(cfg, npy_path, data_path, skeleton, joints_to_index):
 
     return data
 
+def create_data_from_processed_npy(cfg, npy_path):
+    # load motion
+    motion = np.load(npy_path)
+    motion = motion[cfg.start_offset:,:]
 
+    # In advance, calcurate spline function and hasmap between t and length of each motion
+    trajectory = motion[:,:3].copy()
+    trajectory = np.concatenate([np.concatenate([trajectory[:,0:1], np.zeros((trajectory.shape[0],1))], axis=1), trajectory[:,2:3]], axis=1)
+    spline_f = motion_utils.interpolate_spline(trajectory, control_point_interval=cfg.control_point_interval)
+    if spline_f is None:
+        return None 
+         
+    # Get length map for sampling
+    spline_length_map = motion_utils.get_spline_length(trajectory, spline_f, dt=0.1)
+    data = {'motion':motion, 'trajectory':trajectory, 'spline_f':spline_f, 'spline_length_map':spline_length_map}
+
+    # Create new pickle file
+    with open(data_path, mode='wb') as f:
+        pickle.dump(data, f)
+        print(f'Create {data_path}  {motion.shape}')
+
+    return data
 
