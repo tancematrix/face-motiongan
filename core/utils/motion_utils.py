@@ -104,16 +104,18 @@ def labeling_orientation(orientation, label_num):
 ## Spline generation
 # Apply spline interpolation to trajectory 
 def interpolate_spline(trajectory, control_point_interval, kind='cubic'):
-    t = np.array([control_point_interval*i for i in range(int(np.ceil(trajectory.shape[0]/control_point_interval)))]+[trajectory.shape[0]-1])
+    t = np.arange(0, trajectory.shape[0]+control_point_interval-1, control_point_interval)
+    t[-1] = trajectory.shape[0] - 1
     try:
-        f = interpolate.interp1d(t, np.concatenate((trajectory[::control_point_interval,:], trajectory[-2:-1,:]), axis=0), kind=kind, axis=0)
+        f = interpolate.interp1d(t, trajectory[t], kind=kind, axis=0)
     except ValueError:
         try:
-            f = interpolate.interp1d(t, np.concatenate((trajectory[::control_point_interval,:], trajectory[-2:-1,:]), axis=0), kind='quadratic', axis=0)
+            f = interpolate.interp1d(t, trajectory[t], kind='quadratic', axis=0)
         except ValueError:
-            #print('One file ignored with the error below.')
-            #print('ValueError: The number of derivatives at boundaries does not match: expected 2, got 0+0')
-            f = None
+            from IPython import embed; embed()
+        #     print('One file ignored with the error below.')
+        #     print('ValueError: The number of derivatives at boundaries does not match: expected 2, got 0+0\nsee motion_utils.interpolate_spline in dataset.dataset.py')
+        #     f = None
     return f
 
 # Get spline curve length and get mapping between variable t and length
@@ -373,7 +375,7 @@ def calcurate_footskate(trajectory, motion_rightleg, motion_leftleg, threshold=0
     return total_footskate.item()
 
 '''
-Find nearest point in target_curve, from each trajecotry point
+Find nearest point in target_curve, from each trajectory point
 interval : calcurate point interval
 nn_range : how many points of target_curve are included in NN candidates
 '''

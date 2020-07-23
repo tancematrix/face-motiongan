@@ -91,7 +91,7 @@ def test():
     # Set up dataset
     test_dataset = BVHDataset(cfg.test.dataset, mode='test')
     test_dataset_name = os.path.split(cfg.test.dataset.data_root.replace('*', ''))[1]
-
+    from IPython import embed; embed()
 
     # Set standard bvh
     standard_bvh = cfg.test.dataset.standard_bvh if hasattr(cfg.test.dataset, 'standard_bvh') else 'core/datasets/CMU_standard.bvh'
@@ -150,7 +150,7 @@ def test():
         avg_time = (time.time() - start_time) / args.num_samples
 
         # Save results
-        result_path = result_dir + f'/{i:03d}.avi'
+        result_path = result_dir + f'/{i:03d}.gif'
         print(f'\nInference : {result_path} ({v_control.shape[2]} frames) Time: {avg_time:.05f}') 
         save_video(result_path, results_list, cfg.test)
 

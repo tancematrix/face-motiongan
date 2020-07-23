@@ -147,6 +147,9 @@ def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
         elif cfg.standard_bvh is not None:
             data = create_data_from_npy(cfg, npy_path, data_path, skeleton, joints_to_index)
             if data is None: continue
+        else:
+            data = create_data_from_processed_npy(cfg, npy_path, data_path)
+            if data is None: continue
 
         # Register label info
         data['label'] = label
@@ -178,7 +181,6 @@ def create_data_from_npy(cfg, npy_path, data_path, skeleton, joints_to_index):
     _, motion = btoj.cut_zero_length_bone_frames(motion, skeleton, joints_to_index) 
 
     motion = motion[cfg.start_offset:,:]
-
     # In advance, calcurate spline function and hasmap between t and length of each motion
     trajectory = motion[:,:3].copy()
     trajectory = np.concatenate([np.concatenate([trajectory[:,0:1], np.zeros((trajectory.shape[0],1))], axis=1), trajectory[:,2:3]], axis=1)
@@ -197,10 +199,13 @@ def create_data_from_npy(cfg, npy_path, data_path, skeleton, joints_to_index):
 
     return data
 
-def create_data_from_processed_npy(cfg, npy_path):
+def create_data_from_processed_npy(cfg, npy_path, data_path):
     # load motion
-    motion = np.load(npy_path)
-    motion = motion[cfg.start_offset:,:]
+    motion = np.load(npy_path).T
+    # motion = motion[cfg.start_offset:,:]
+    if motion.shape[0] == 204 or motion.shape[0] < 80:
+        return None
+    print(motion.shape)
 
     # In advance, calcurate spline function and hasmap between t and length of each motion
     trajectory = motion[:,:3].copy()
@@ -217,6 +222,5 @@ def create_data_from_processed_npy(cfg, npy_path):
     with open(data_path, mode='wb') as f:
         pickle.dump(data, f)
         print(f'Create {data_path}  {motion.shape}')
-
     return data
 

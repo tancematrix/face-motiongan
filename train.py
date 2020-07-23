@@ -66,8 +66,21 @@ def train():
     # set start iteration
     iteration = 0
 
+    # Set up dataset
+    train_dataset = BVHDataset(cfg.train.dataset, mode='train')
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size = cfg.train.batchsize,
+        num_workers = cfg.train.num_workers,
+        shuffle=True,
+        drop_last=True)
+    print(f'Data root \033[1m\"{cfg.train.dataset.data_root}\"\033[0m contains \033[1m{len(train_dataset)}\033[0m samples.')
+    
     # Set up networks to train
     num_class = len(cfg.train.dataset.class_list)
+    # from IPython import embed; embed()
+    n_joints = (train_dataset[0][0].shape[1]-3)//3
+
     gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class).to(device)
     dis = getattr(models, cfg.models.discriminator.model)(cfg.models.discriminator, cfg.train.dataset.frame_nums//cfg.train.dataset.frame_step, num_class).to(device)
     networks = {'gen': gen, 'dis': dis}
@@ -97,15 +110,6 @@ def train():
         opts['dis'].load_state_dict(checkpoint['opt_dis_state_dict'])
            
 
-    # Set up dataset
-    train_dataset = BVHDataset(cfg.train.dataset, mode='train')
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size = cfg.train.batchsize,
-        num_workers = cfg.train.num_workers,
-        shuffle=True,
-        drop_last=True)
-    print(f'Data root \033[1m\"{cfg.train.dataset.data_root}\"\033[0m contains \033[1m{len(train_dataset)}\033[0m samples.')
 
 
     # Save scripts and command
@@ -156,7 +160,7 @@ def train():
     state[f'dis_state_dict'] = dis.state_dict()
     state['opt_gen_state_dict'] = opts['gen'].state_dict()
     state['opt_dis_state_dict'] = opts['dis'].state_dict()
-     
+    
     path = os.path.join(os.path.join(cfg.train.out,'checkpoint'), f'checkpoint.pth.tar')
     torch.save(state, path)
     torch.save(gen.state_dict(), os.path.join(cfg.train.out,f'gen.pth'))
@@ -253,6 +257,7 @@ def train_loop(train_loader,
         gt_v_trajectory = F.pad(gt_v_trajectory, (0,0,1,0), mode='reflect')
         gt_v_trajectory = Variable(gt_v_trajectory).to(device)
 
+        # import pdb; pdb.set_trace()
 
         # Convert control curve to velociry
         v_control = control[:,:,1:,] - control[:,:,:-1,:]
@@ -284,6 +289,7 @@ def train_loop(train_loader,
         #---------------------------------------------------
         if _lam_g_adv > 0:
             # Forward Discriminator
+            # from IPython import embed; embed()
             d_fake_adv, d_fake_cls = dis(torch.cat((fake_v_trajectory.repeat(1,1,1,n_joints).detach(),
                                                     x_fake.detach()),
                                                     dim=1))
@@ -411,7 +417,7 @@ def train_loop(train_loader,
         #---------------------------------------------------
         # Save checkpoint
         #---------------------------------------------------
-        if (iteration+i+1) % cfg.train.save_interval == 0:
+        if (iteration+i+1) % cfg.train.save_interval == 0 or True:
             if not os.path.exists(os.path.join(cfg.train.out,'checkpoint')):
                 os.makedirs(os.path.join(cfg.train.out,'checkpoint'))
             path = os.path.join(os.path.join(cfg.train.out,'checkpoint'), f'iter_{iteration + i:04d}.pth.tar')
@@ -439,9 +445,13 @@ def train_loop(train_loader,
                 caption = cfg.train.dataset.class_list[fake_label[0].cpu().numpy()]
                 preview_list.append({'caption': caption, 'motion':torch.cat((fake_trajectory, x_fake.data.cpu()[:1,:,:,:]), dim=3), 'control': control.data.cpu()[:1,:,:,:]})
                 
-            preview_path = os.path.join(cfg.train.out, 'preview', f'iter_{iteration+i+1}.avi')
-            save_video(preview_path, preview_list, cfg.train)
-            gen.train()
+            preview_path = os.path.join(cfg.train.out, 'preview', f'iter_{iteration+i+1}.pkl')
+            # print(preview_path)
+            if not os.path.exists(os.path.split(preview_path)[0]):
+                os.makedirs(os.path.split(preview_path)[0])
+            pickle.dump(preview_list, open(preview_path, "wb"))
+            # save_video(preview_path, preview_list, cfg.train)
+            # gen.train()
 
         # Finish training
         if iteration+i+1 > total_iteration:

@@ -21,6 +21,7 @@ import shutil
 
 import core.utils.bvh_to_joint as btoj
 from core.visualize.preprocess import preprocess
+# import joblib
 
 
 def save_video(preview_path, preview_list, config, camera_move='chase', elev=15, azim=45, lw=5):
@@ -209,3 +210,115 @@ def plot_figure(tmp_out_dir, data, motion_id, parts, view_range, lw, elev, azim,
         plt.close()
 
     return
+
+
+
+### 以下face analysis用 ###
+
+def plot_face(tmp_out_dir, data, motion_id):
+    caption = data['caption']
+    motion = data['motion']
+    control = data['control']
+    frames = []
+    frame_length = motion.shape[0]
+
+    # Plot each frame in motion
+    trajectory = motion[:,0:3]
+    for frame_id in range(frame_length):
+        # Plot initialization
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(x=motion[frame_id,0,0], y=-d[frame_id,1,0])
+        ax.set_aspect("equal")
+
+
+def save_points_as_gif(preview_path, preview_list, config):
+    if not os.path.exists(os.path.split(preview_path)[0]):
+        os.makedirs(os.path.split(preview_path)[0])
+
+    view_range = config.preview.view_range
+    save_delay = config.preview.save_delay
+    save_format = os.path.splitext(preview_path)[1]
+
+    preview_list = preprocess(preview_list, config)
+
+
+    # Create temporal file save directory
+    i = 0
+    tmp_out_dir = os.path.join('tmp', str(i))
+    while os.path.exists(tmp_out_dir):
+        tmp_out_dir = os.path.join('tmp', str(i))
+        i += 1
+    os.makedirs(tmp_out_dir)
+
+
+    # Save each preview frame
+    try:
+        frames = []
+        frame_length = preview_list[0]['motion'].shape[0]
+
+        end = time.time()
+
+        jobs = []
+        for j, data in enumerate(preview_list):
+            p = multiprocessing.Process(target=plot_figure, args=(tmp_out_dir, data, j, parts, view_range, lw, elev, azim, camera_move))
+            jobs.append(p)
+            p.start()
+
+        for pj in jobs:
+            pj.join()
+
+        # Save image of each frame in tmp directory
+        WIDTH = 1080
+        HEIGHT = 810
+        COLUMN = min(len(preview_list), 4)
+        row = math.ceil(len(preview_list)/COLUMN)
+        image_size = (WIDTH//row, HEIGHT//row)
+
+
+        # Concat each frame
+        for t in range(frame_length):
+            for i in range(row):
+                for j in range(4):
+                    if j == 0:
+                        im_rowcol = cv2.resize(cv2.imread(f'{tmp_out_dir}/{t:05d}_{i*4+j:02d}.png'), image_size)
+                        im_row = im_rowcol
+                    elif i*4+j >= len(preview_list):
+                        if row == 1:
+                            break
+                        im_rowcol = cv2.resize(np.zeros_like(im_rowcol).astype(np.uint8), image_size)
+                        im_row = cv2.hconcat([im_row, im_rowcol])
+                    else:
+                        im_rowcol = cv2.resize(cv2.imread(f'{tmp_out_dir}/{t:05d}_{i*4+j:02d}.png'), image_size)
+                        im_row = cv2.hconcat([im_row, im_rowcol])
+                if i == 0:
+                    im = im_row
+                else:
+                    im = cv2.vconcat([im, im_row])
+
+            if save_format == '.avi':
+                writer.write(im)
+                sys.stdout.write(f'\rvideo writing... {t}/{frame_length}')
+                sys.stdout.flush()
+            elif save_format == '.gif':
+                cv2.imwrite(f'{tmp_out_dir}/concat_{t:05d}.png', im)
+
+
+        if save_format == '.avi':
+            cv2.destroyAllWindows()
+            writer.release()
+        elif save_format == '.gif':
+            # Combine frame images into gif by imagemagick convert
+            cmd = ['convert','-layers','optimize','-loop','0','-delay', f'{save_delay}',f'{tmp_out_dir}/concat_*.png',f'{preview_path}']
+            subprocess.run(cmd)
+
+    except KeyboardInterrupt:
+        shutil.rmtree(tmp_out_dir)
+        print('\033[91m\nUser Keyboard Interrupt\033[0m')
+        sys.exit()
+
+    shutil.rmtree(tmp_out_dir)
+    print(f'Preview Saved. (Time:{time.time()-end:.04f})')
+
+    return
+        
