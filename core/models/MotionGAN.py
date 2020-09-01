@@ -32,7 +32,7 @@ class MotionGAN_generator(nn.Module):
         self.num_class = num_class
         self.z_dim = cfg.z_dim
         self.activation = nn.LeakyReLU()
-        self.n_rows = 192
+        self.n_rows = 204
         self.num_adain = 14
 
 
@@ -47,15 +47,16 @@ class MotionGAN_generator(nn.Module):
 
         self.dc_bottom = deconv_layer(top*8, top*8, ksize=(kw,3), stride=(1,3), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
 
-        self.dc3_1 = deconv_layer(top*8, top*8, ksize=(kw,4), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
-        self.dc3_0 = conv_layer(top*8, top*4, ksize=(kw,3), stride=(1,1), pad=(kw//2,3), normalize=None, padding_mode=padding_mode)
-        self.dc2_1 = deconv_layer(top*8, top*4, ksize=(kw,4), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
-        self.dc2_0 = conv_layer(top*4, top*2, ksize=(kw,3), stride=(1,1), pad=(kw//2,1), normalize=None, padding_mode=padding_mode)
-        self.dc1_1 = deconv_layer(top*4, top*2, ksize=(kw,4), stride=(1,3), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
-        self.dc1_0 = conv_layer(top*2, top, ksize=(kw,3), stride=(1,1), pad=(kw//2,1), normalize=None, padding_mode=padding_mode)
-        self.dc0_1 = deconv_layer(top, top, ksize=(kw, 4), stride=(1,3), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
+        self.dc3_1 = deconv_layer(top*8, top*8, ksize=(kw,5), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
+        self.dc3_0 = conv_layer(top*8, top*4, ksize=(kw,2), stride=(1,1), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
+        self.dc2_1 = deconv_layer(top*8, top*4, ksize=(kw,6), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
+        self.dc2_0 = conv_layer(top*4, top*2, ksize=(kw,2), stride=(1,1), pad=(kw//2,1), normalize=None, padding_mode=padding_mode)
+        self.dc1_1 = deconv_layer(top*4, top*2, ksize=(kw,6), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode) 
+        self.dc1_0 = conv_layer(top*2, top, ksize=(kw,2), stride=(1,1), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
+        self.dc0_1 = deconv_layer(top, top, ksize=(kw, 6), stride=(1,4), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
         self.dc0_0 = conv_layer(top, 1, ksize=(kw,2), stride=(1,1), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
         self.c_traj = conv_layer(top, 3, ksize=(kw,self.n_rows), stride=(1,2), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
+        self.c_rot = conv_layer(top, 3, ksize=(kw,self.n_rows), stride=(1,2), pad=(kw//2,0), normalize=None, padding_mode=padding_mode)
 
         # style generator
         self.latent_transform = LatentTransformation(cfg, num_class)
@@ -137,25 +138,31 @@ class MotionGAN_generator(nn.Module):
         d2 = self.adain_dc3_1(d2, w[:,5])
         d2 = self.activation(self.dc3_0(d2))
         d2 = self.adain_dc3_0(d2, w[:,4])
-
-        d1 = self.activation(self.dc2_1(F.interpolate(torch.cat((e2.repeat(1,1,1,16), d2), dim=1), scale_factor=(2,1), mode='bilinear', align_corners=False)))
+        # print(f"d2:{d2.shape}")
+        d1 = self.activation(self.dc2_1(F.interpolate(torch.cat((e2.repeat(1,1,1,12), d2), dim=1), scale_factor=(2,1), mode='bilinear', align_corners=False)))
         d1 = self.adain_dc2_1(d1, w[:,3])
         d1 = self.activation(self.dc2_0(d1))
         d1 = self.adain_dc2_0(d1, w[:,2])
-
-        d0 = self.activation(self.dc1_1(F.interpolate(torch.cat((e1.repeat(1,1,1,64), d1), dim=1), scale_factor=(2,1), mode='bilinear', align_corners=False)))
+        # print(f"d1:{d1.shape}")
+        d0 = self.activation(self.dc1_1(F.interpolate(torch.cat((e1.repeat(1,1,1,51), d1), dim=1), scale_factor=(2,1), mode='bilinear', align_corners=False)))
         d0 = self.adain_dc1_1(d0, w[:,1])
         d0 = self.activation(self.dc1_0(d0))
         d0 = self.adain_dc1_0(d0, w[:,0])
+        # print(f"d0:{d0.shape}")
 
         ## Get trajectory
         traj = self.c_traj(d0)
         traj = traj.transpose(1,3)
-        
+
+        ## Get rotation
+        rot = self.c_rot(d0)
+        rot = rot.transpose(1,3)
+
         ## Get motion 
         motion = self.dc0_0(d0)
+        # print(f"motion:{motion.shape}")
  
-        return traj, motion 
+        return rot, traj, motion 
 
 
 

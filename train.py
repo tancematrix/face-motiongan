@@ -42,6 +42,24 @@ def parse_args():
 
 #%---------------------------------------------------------------------------------------
 
+def RotationMatrix(theta):
+    x = theta[..., 0]
+    y = theta[..., 1]
+    z = theta[..., 2]
+    cos = torch.cos
+    sin = torch.sin
+    R1 = torch.stack([cos(y) * cos(z), sin(x) * sin(y) * cos(z) - cos(x) * sin(z), cos(x) * sin(y) * cos(z) + sin(x) * sin(z)], dim=-1)
+    R2 = torch.stack([cos(y) * sin(z), sin(x) * sin(y) * sin(z) + cos(x) * cos(z), cos(x) * sin(y) * sin(z) - sin(x) * cos(z)], dim=-1)
+    R3 = torch.stack([-sin(y),         sin(x) * cos(y), cos(x) * cos(y)], dim=-1)
+    R = torch.stack([R1, R2, R3], dim=-2)
+    return R
+
+def rotate(motion, rotation):
+    R = RotationMatrix(rotation)
+    shape = motion.shape
+
+    return torch.matmul(motion.reshape(*shape[:-1], 68, 3), R).view(shape)
+
 
 def train():
     global args, cfg, device
@@ -75,6 +93,7 @@ def train():
         shuffle=True,
         drop_last=True)
     print(f'Data root \033[1m\"{cfg.train.dataset.data_root}\"\033[0m contains \033[1m{len(train_dataset)}\033[0m samples.')
+    # from IPython import embed; embed()
     
     # Set up networks to train
     num_class = len(cfg.train.dataset.class_list)
@@ -244,14 +263,14 @@ def train_loop(train_loader,
         # Motion and control signal data
         x_data = x_data.unsqueeze(1).type(torch.FloatTensor)
         x_real = Variable(x_data).to(device)
-
         control_data = control_data.unsqueeze(1).type(torch.FloatTensor)
         control = control_data.to(device)
 
         batchsize = x_data.shape[0]
-        n_joints = (x_data.shape[3]-3)//3
+        n_joints = (x_data.shape[3]-6)//3
 
         # Convert root trajectory to velocity
+        gt_rotation = x_data[:,:,:,3:6]
         gt_trajectory = x_data[:,:,:,0:3]
         gt_v_trajectory = gt_trajectory[:,:,1:,:] - gt_trajectory[:,:,:-1,:]
         gt_v_trajectory = F.pad(gt_v_trajectory, (0,0,1,0), mode='reflect')
@@ -280,23 +299,23 @@ def train_loop(train_loader,
        
         
         ### Forward Generator
-        fake_v_trajectory, x_fake = gen(v_control, z, fake_label)
+        fake_rot, fake_v_trajectory, x_fake = gen(v_control, z, fake_label)
 
-
+        from IPython import embed; embed()
         loss_collector = {}
         #---------------------------------------------------
         #  Update Discriminator
         #---------------------------------------------------
         if _lam_g_adv > 0:
             # Forward Discriminator
-            # from IPython import embed; embed()
+            x_real = rotate(x_real[:,:,:,6:], x_real[:,:,:,3:6])
+            x_fake = rotate(x_fake, fake_rot)
             d_fake_adv, d_fake_cls = dis(torch.cat((fake_v_trajectory.repeat(1,1,1,n_joints).detach(),
                                                     x_fake.detach()),
                                                     dim=1))
             d_real_adv, d_real_cls = dis(torch.cat((gt_v_trajectory.repeat(1,1,1,n_joints).detach(),
-                                                    x_real[:,:,:,3:]),
+                                                    x_real),
                                                     dim=1))
-
 
             # GAN loss
             if cfg.train.GAN_type == 'ls' or cfg.train.GAN_type == 'normal':
@@ -417,7 +436,7 @@ def train_loop(train_loader,
         #---------------------------------------------------
         # Save checkpoint
         #---------------------------------------------------
-        if (iteration+i+1) % cfg.train.save_interval == 0 or True:
+        if (iteration+i+1) % cfg.train.save_interval == 0:
             if not os.path.exists(os.path.join(cfg.train.out,'checkpoint')):
                 os.makedirs(os.path.join(cfg.train.out,'checkpoint'))
             path = os.path.join(os.path.join(cfg.train.out,'checkpoint'), f'iter_{iteration + i:04d}.pth.tar')
@@ -435,21 +454,23 @@ def train_loop(train_loader,
             gen.eval()
             # Generate multiple samples
             preview_list = []
-            preview_list.append({'caption': 'real', 'motion': x_data[:1,:,:,:], 'control': control.data.cpu()[:1,:,:,:]})
+            preview_list.append({'caption': 'real', 'motion': x_data[:1,:,:,:], 'control': control.data.cpu()[:1,:,:,:], 'rotation': x_data[:1,:,:,3:6]})
             for k in range(3):
                 z = Variable(gen.make_hidden(1, x_data.shape[2])).to(device) if cfg.models.generator.use_z else None
                 fake_label = torch.randint(0, len(class_list), size=(1,)).type(torch.LongTensor).to(device)
 
-                fake_v_trajectory, x_fake = gen(v_control[:1,:,:,:], z, fake_label)
+                fake_rot, fake_v_trajectory, x_fake = gen(v_control[:1,:,:,:], z, fake_label)
                 fake_trajectory = reconstruct_v_trajectory(fake_v_trajectory.data.cpu()[:1,:,:,:], gt_trajectory[:1,:,:1,:])
                 caption = cfg.train.dataset.class_list[fake_label[0].cpu().numpy()]
-                preview_list.append({'caption': caption, 'motion':torch.cat((fake_trajectory, x_fake.data.cpu()[:1,:,:,:]), dim=3), 'control': control.data.cpu()[:1,:,:,:]})
+                preview_list.append({'caption': caption, 'motion':torch.cat((fake_trajectory, x_fake.data.cpu()[:1,:,:,:]), dim=3), 'control': control.data.cpu()[:1,:,:,:], 'rotation':fake_rot[:1,:,:,:]})
                 
             preview_path = os.path.join(cfg.train.out, 'preview', f'iter_{iteration+i+1}.pkl')
             # print(preview_path)
             if not os.path.exists(os.path.split(preview_path)[0]):
                 os.makedirs(os.path.split(preview_path)[0])
             pickle.dump(preview_list, open(preview_path, "wb"))
+            # print("save preview!")
+
             # save_video(preview_path, preview_list, cfg.train)
             # gen.train()
 

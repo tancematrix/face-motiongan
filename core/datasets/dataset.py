@@ -36,9 +36,14 @@ class BVHDataset(Dataset):
 
             # Cut fixed length sequence from motion
             motion_part = data['motion'][start_frame:start_frame+frame_nums:frame_step, :]
+
+            if len(motion_part) < frame_nums // frame_step:
+                motion_part = np.pad(motion_part, (0, frame_nums - len(motion_part)), "edge")
             # Get trajectory from motion
             trajectory = data['motion'][start_frame:start_frame+frame_nums,:3].copy()
-            trajectory = np.concatenate([np.concatenate([trajectory[:,0:1], np.zeros((trajectory.shape[0],1))], axis=1), trajectory[:,2:3]], axis=1)
+            if len(trajectory) < frame_nums:
+                trajectory = np.pad(trajectory, (0, frame_nums - len(trajectory)), "edge")
+
             # Re-calcurate spline f(t) with modified fps
             spline_f = motion_utils.interpolate_spline(trajectory, control_point_interval=self.cfg.control_point_interval)
             spline_length_map = motion_utils.get_spline_length(trajectory, spline_f, 1.0)
@@ -53,7 +58,7 @@ class BVHDataset(Dataset):
                                         np.interp(np.arange(frame_nums), np.arange(control_part.shape[0]), control_part[:,2])], axis=1)
             else:
                 control_part = motion_utils.sampling(trajectory, spline_f, spline_length_map, 1.0, startT=0, endT=frame_nums, step=frame_step, with_noise=True)
-            control_part[:,1] = control_part[:,1] - control_part[:,1]
+            # control_part[:,1] = control_part[:,1] - control_part[:,1]
 
         elif self.mode == 'test':
             # Get maximum length motion
@@ -64,17 +69,16 @@ class BVHDataset(Dataset):
                 motion_part = motion_part[:-16,:]
             trajectory_part = motion_part[:,:3] 
             control_part = motion_utils.sampling(trajectory_part, data['spline_f'], data['spline_length_map'], 0.1, startT=0, endT=motion_part.shape[0]*self.cfg.frame_step, step=self.cfg.frame_step, with_noise=False)
-            control_part[:,1] = control_part[:,1] - control_part[:,1]
+            # control_part[:,1] = control_part[:,1] - control_part[:,1]
 
         else:
             # Cut fixed length sequence from motion
             motion_part = data['motion'][start_frame:start_frame+self.cfg.frame_nums:self.cfg.frame_step, :]
             # Get trajectory from motion
             trajectory = data['motion'][start_frame:start_frame+self.cfg.frame_nums,:3].copy()
-            trajectory = np.concatenate([np.concatenate([trajectory[:,0:1], np.zeros((trajectory.shape[0],1))], axis=1), trajectory[:,2:3]], axis=1)
             # Sampling control signal
-            control_part = motion_utils.sampling(trajectory, data['spline_f'], data['spline_length_map'], 1.0, startT=0, endT=self.frame_nums, step=self.frame_step, with_noise=True)
-            control_part[:,1] = control_part[:,1] - control_part[:,1]
+            control_part = motion_utils.sampling(trajectory, data['spline_f'], data['spline_length_map'], 1.0, startT=0, endT=self.cfg.frame_nums, step=self.frame_step, with_noise=True)
+            # control_part[:,1] = control_part[:,1] - control_part[:,1]
 
 
         # rotation
@@ -203,13 +207,9 @@ def create_data_from_processed_npy(cfg, npy_path, data_path):
     # load motion
     motion = np.load(npy_path).T
     # motion = motion[cfg.start_offset:,:]
-    if motion.shape[0] == 204 or motion.shape[0] < 80:
-        return None
-    print(motion.shape)
 
     # In advance, calcurate spline function and hasmap between t and length of each motion
     trajectory = motion[:,:3].copy()
-    trajectory = np.concatenate([np.concatenate([trajectory[:,0:1], np.zeros((trajectory.shape[0],1))], axis=1), trajectory[:,2:3]], axis=1)
     spline_f = motion_utils.interpolate_spline(trajectory, control_point_interval=cfg.control_point_interval)
     if spline_f is None:
         return None 
@@ -219,8 +219,9 @@ def create_data_from_processed_npy(cfg, npy_path, data_path):
     data = {'motion':motion, 'trajectory':trajectory, 'spline_f':spline_f, 'spline_length_map':spline_length_map}
 
     # Create new pickle file
-    with open(data_path, mode='wb') as f:
-        pickle.dump(data, f)
-        print(f'Create {data_path}  {motion.shape}')
+    if data_path is not None:
+        with open(data_path, mode='wb') as f:
+            pickle.dump(data, f)
+            print(f'Create {data_path}  {motion.shape}')
     return data
 
