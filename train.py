@@ -301,7 +301,7 @@ def train_loop(train_loader,
         ### Forward Generator
         fake_rot, fake_v_trajectory, x_fake = gen(v_control, z, fake_label)
 
-        from IPython import embed; embed()
+        # from IPython import embed; embed()
         loss_collector = {}
         #---------------------------------------------------
         #  Update Discriminator
@@ -347,6 +347,7 @@ def train_loop(train_loader,
 
             opt_dis.zero_grad()
             d_loss.backward()
+            torch.nn.utils.clip_grad_norm_(dis.parameters(), 5)
             opt_dis.step()
 
 
@@ -406,6 +407,8 @@ def train_loop(train_loader,
              
         opt_gen.zero_grad()
         g_loss.backward()
+        torch.nn.utils.clip_grad_norm_(gen.parameters(), 5)
+
         opt_gen.step()
 
 
