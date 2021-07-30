@@ -1,5 +1,4 @@
-import itertools as __itertools
-
+import itertools
 # Models
 models = dict(
     generator = dict(
@@ -27,13 +26,12 @@ train = dict(
     batchsize = 24,
     num_workers = 16,
     total_iterations = 200000,
-    out = 'results/MotionGAN/FaceAnalysis0721',
+    out = 'results/MotionGAN/FaceAnalysis',
 
     # Dataset
     dataset=dict(
         data_root = '/home/takeuchi/data/RAVDESS_processed/train',
-        multi_class = True,
-        class_list = ["01-0{}-0{}-0{}-0{}-0{}-{:02}".format(*nums) for nums in __itertools.product([1,2],[1,2,3,4,5,6,7,8],[1,2],[1,2],[1,2],list(range(1,25)))],
+        class_list = ["01-0{}-0{}-0{}-0{}-0{}-{:02}".format(*nums) for nums in itertools.product([1,2],[1,2,3,4,5,6,7,8],[1,2],[1,2],[1,2],list(range(1,25)))],
         start_offset = 1,
         control_point_interval = 8,
         standard_bvh = None,
@@ -41,7 +39,7 @@ train = dict(
         frame_nums = 64,
         frame_step = 2,
         augment_fps = True,
-        rotate = False,
+        rotate = True,
     ),
 
     # Iteration intervals
@@ -71,13 +69,12 @@ train = dict(
 
 # Testing strategy
 test = dict(
-    out = 'results/MotionGAN/FaceAnalysis0721',
+    out = 'results/MotionGAN/FaceAnalysis',
     dataset=dict(
         data_root = '/home/takeuchi/data/RAVDESS_processed/test',
         class_list = [],
         start_offset = 1,
         control_point_interval = 8,
-        standard_bvh = None,
         scale = 1.,
         frame_step = 2,
     ),

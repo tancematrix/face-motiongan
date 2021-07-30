@@ -112,10 +112,10 @@ def interpolate_spline(trajectory, control_point_interval, kind='cubic'):
         try:
             f = interpolate.interp1d(t, trajectory[t], kind='quadratic', axis=0)
         except ValueError:
-            from IPython import embed; embed()
-        #     print('One file ignored with the error below.')
-        #     print('ValueError: The number of derivatives at boundaries does not match: expected 2, got 0+0\nsee motion_utils.interpolate_spline in dataset.dataset.py')
-        #     f = None
+            # from IPython import embed; embed()
+            print('One file ignored with the error below.')
+            print('ValueError: The number of derivatives at boundaries does not match: expected 2, got 0+0\nsee motion_utils.interpolate_spline in dataset.dataset.py')
+            f = None
     return f
 
 # Get spline curve length and get mapping between variable t and length

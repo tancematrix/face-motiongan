@@ -22,6 +22,19 @@ import core.utils.motion_utils as motion_utils
 
 import pathlib
 
+def RotationMatrix(theta):
+    x = theta[..., 0]
+    y = theta[..., 1]
+    z = theta[..., 2]
+    cos = torch.cos
+    sin = torch.sin
+    R1 = torch.stack([cos(y) * cos(z), sin(x) * sin(y) * cos(z) - cos(x) * sin(z), cos(x) * sin(y) * cos(z) + sin(x) * sin(z)], dim=-1)
+    R2 = torch.stack([cos(y) * sin(z), sin(x) * sin(y) * sin(z) + cos(x) * cos(z), cos(x) * sin(y) * sin(z) - sin(x) * cos(z)], dim=-1)
+    R3 = torch.stack([-sin(y),         sin(x) * cos(y), cos(x) * cos(y)], dim=-1)
+    R = torch.stack([R1, R2, R3], dim=-2)
+    return R
+
+
 
 # from train import rotate
 def rotate(_motion, rotation, bias, device='cpu'):
@@ -71,9 +84,20 @@ def test():
     ## Prepare for test 
     #####################################################  
 
+
+
+    pca_root = pathlib.Path(cfg.train.dataset.pca_root)
+    pca_mean = np.load(pca_root / "mean.npy")
+    pca_components = np.load(pca_root / "components.npy")
+    pca_mean = torch.Tensor(pca_mean).to(device)
+    pca_components = torch.Tensor(pca_components).to(device)
+
+
+
+
     # Set up generator network
     num_class = len(cfg.train.dataset.class_list)
-    gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class).to(device)
+    gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class, pca_mean, pca_components).to(device)
 
     total_params = sum(p.numel() for p in gen.parameters() if p.requires_grad)
     print(f'Total parameter amount : \033[1m{total_params}\033[0m')
@@ -114,7 +138,7 @@ def test():
 
 
     # Create output directory
-    result_dir = f'{cfg.test.out}/sample_generation/iter_{iteration}/'
+    result_dir = pathlib.Path(f'{cfg.test.out}/sample_generation/iter_{iteration}/')
     if not os.path.exists(result_dir):
         os.makedirs(result_dir)
 
@@ -129,7 +153,6 @@ def test():
 
     trajectory_part = x_data[:,:3] 
     control_data = motion_utils.sampling(trajectory_part, data['spline_f'], data['spline_length_map'], 0.1, startT=0, endT=x_data.shape[0]*cfg.test.dataset.frame_step, step=cfg.test.dataset.frame_step, with_noise=False)
-    control_data[:,1] = control_data[:,1] - control_data[:,1]
 
 
 
@@ -143,11 +166,14 @@ def test():
     control_data = torch.from_numpy(control_data).unsqueeze(0).unsqueeze(1).type(torch.FloatTensor) 
     control = control_data.to(device)
 
-    # Convert root trajectory to verocity
-    gt_trajectory = x_data[:,:,:,0:3]
-    gt_v_trajectory = gt_trajectory[:,:,1:,:] - gt_trajectory[:,:,:-1,:]
-    gt_v_trajectory = F.pad(gt_v_trajectory, (0,0,1,0), mode='reflect')
-    gt_v_trajectory = Variable(gt_v_trajectory).to(device)
+    n_joints = 68
+    # Convert root trajectory to velocity
+    gt_rotation = x_data[:,:,:,0:3]
+    gt_bias = x_data[:,:,:,3:6]
+    gt_trajectory = x_data[:,:,:,6:9]
+    control = gt_trajectory.to(device)#.unsqueeze(1).type(torch.FloatTensor)
+    gt_motion = x_real[:,:,:,6:]
+    gt_motion = torch.matmul(gt_motion, pca_components) + pca_mean
 
 
     # Convert control curve to velocity 
@@ -159,10 +185,12 @@ def test():
     # source_label = cfg.train.dataset.class_list[int(source_path.stem[7:8])-1]
     source_label = source_path.stem.split("_")[0]
     # from IPython import embed; embed()
-    x_data = torch.cat((gt_trajectory, rotate(x_data[:,:,:,9:].to("cpu"), x_data[:,:,:,3:6].to("cpu"), x_data[:,:,:,6:9].to("cpu"), device="cpu")), dim=3)
-    results_list.append({'caption': f'real({source_label})', 'motion': x_data, 'control': control.data.cpu()})
-
-
+    # x_motion = rotate(gt_motion.to("cpu"), x_data[:,:,:,3:6].to("cpu"), x_data[:,:,:,6:9].to("cpu"), device="cpu")
+    x_motion = gt_motion.to("cpu").detach()
+    results_list.append({'caption': f'real({source_label})', 'motion': x_motion, 'control': control.data.cpu(), 'raw':x_data.data.cpu()})
+    x_motion = x_motion.detach().numpy().squeeze().T
+    # x_motion = x_motion.reshape(x_motion[0], -1, 3) 
+    np.save(result_dir / (source_path.stem + "_real.npy"), x_motion)
     start_time = time.time()
 
 
@@ -171,17 +199,26 @@ def test():
         # Generate noize z
         z = gen.make_hidden(1, x_data.shape[2]).to(device) if cfg.models.generator.use_z else None
         fake_label = torch.tensor([fake_label]).type(torch.LongTensor).to(device)
-        fake_v_trajectory, fake_rot, fake_bias, x_fake = gen(v_control, z, fake_label)
-        fake_trajectory = reconstruct_v_trajectory(fake_v_trajectory.data.cpu(), torch.zeros(1,1,1,3))
-        x_fake = rotate(x_fake.to("cpu"), fake_rot.to("cpu"), fake_bias.to("cpu"), device="cpu")
+        fake_rot, fake_bias, x_fake = gen(v_control, z, fake_label)
+        fake_motion = torch.matmul(x_fake, pca_components) + pca_mean
+        fake_trajectory = x_fake[:,:,:,:3]
+
+        # fake_trajectory = reconstruct_v_trajectory(fake_v_trajectory.data.cpu(), torch.zeros(1,1,1,3))
+        # fake_motion = rotate(fake_motion.to("cpu"), fake_rot.to("cpu"), fake_bias.to("cpu"), device="cpu")
+        fake_motion = fake_motion.to("cpu").detach()
         caption = f'{cfg.train.dataset.class_list[fake_label]}'
-        results_list.append({'caption': caption, 'motion': torch.cat((fake_trajectory, x_fake.data.cpu()), dim=3), 'control': control.data.cpu()})
+        results_list.append({'caption': caption, 'motion': fake_motion.data.cpu(), 'control': control.data.cpu(), 'raw': torch.cat([fake_rot, fake_bias, x_fake], dim=3).data.cpu()})
+        fake_motion = fake_motion.detach().numpy().squeeze().T
+    # x_motion = x_motion.reshape(x_motion[0], -1, 3) 
+        np.save(result_dir / (source_path.stem + f"_fake_{caption}.npy"), fake_motion)
+    start_time = time.time()
+
 
     avg_time = (time.time() - start_time) / len(cfg.train.dataset.class_list)
 
     # Save results
-    result_path = result_dir + f'/{source_path.stem}_transfered.pkl'
-    print(f'\nInference : {result_path} ({v_control.shape[2]} frames) Time: {avg_time:.05f}') 
+    result_path = result_dir / f'{source_path.stem}_transfered.pkl'
+    print(f'\nInference : {str(result_path)} ({v_control.shape[2]} frames) Time: {avg_time:.05f}') 
     pickle.dump(results_list, open(result_path, "wb"))
 
     # save_video(result_path, results_list, cfg.test)

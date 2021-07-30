@@ -1,0 +1,72 @@
+neutral
+   content   style        l2        dtw       ddtw
+0        0  target  0.406877  35.978058  35.009948
+1        0   other  0.406877  35.978058  35.009948
+2        0    rank  4.000000   4.000000   4.000000
+3        1  target  0.386658  34.445741  32.899339
+4        1   other  0.386658  34.445741  32.899339
+5        1    rank  4.000000   4.000000   4.000000
+content_swap
+   content   style        l2        dtw       ddtw
+0        0  target  0.273145  25.737935  24.206190
+1        0   other  0.423444  37.929173  35.927923
+2        0    rank  1.250000   1.250000   1.250000
+3        1  target  0.273145  25.737935  24.206190
+4        1   other  0.423444  37.929173  35.927923
+5        1    rank  1.250000   1.500000   1.375000
+results/MotionGAN/FaceAnalysis1122_normalize/transfer/iter_300000
+   content   style        l2        dtw       ddtw
+0        0  target  0.649822  54.709577  52.962178
+1        0   other  0.655975  55.576964  53.308655
+2        0    rank  3.875000   3.625000   4.250000
+3        1  target  0.650524  55.079231  53.092514
+4        1   other  0.662702  56.208444  53.566154
+5        1    rank  3.625000   3.625000   3.750000
+results/MotionGAN/FaceAnalysis0118_pca_diff/transfer/iter_175000
+   content   style        l2        dtw       ddtw
+0        0  target  0.615382  52.993342  49.427480
+1        0   other  0.615316  52.991873  49.421780
+2        0    rank  4.500000   4.500000   4.500000
+3        1  target  0.621981  53.498679  49.868575
+4        1   other  0.622211  53.527998  49.894269
+5        1    rank  4.500000   4.500000   4.500000
+results/MotionGAN/FaceAnalysis0118_ae/transfer/iter_100000
+   content   style        l2        dtw       ddtw
+0        0  target  0.562776  47.204224  44.763294
+1        0   other  0.601391  50.255348  47.704079
+2        0    rank  3.000000   3.250000   3.000000
+3        1  target  0.556183  46.633925  43.859638
+4        1   other  0.595982  49.842986  47.069845
+5        1    rank  2.625000   2.750000   2.750000
+results/MotionGAN/FaceAnalysis0118_ae_input27/transfer/iter_100000
+   content   style        l2        dtw       ddtw
+0        0  target  0.432360  37.790854  35.857172
+1        0   other  0.473604  40.893738  39.019892
+2        0    rank  3.875000   4.125000   4.125000
+3        1  target  0.436029  38.002014  36.043242
+4        1   other  0.479051  41.302829  39.181775
+5        1    rank  3.375000   3.375000   3.500000
+results/MotionGAN/FaceAnalysis0125_linear_ae/transfer/iter_50000
+   content   style        l2        dtw       ddtw
+0        0  target  0.523497  44.623192  41.831451
+1        0   other  0.559633  47.500034  44.575848
+2        0    rank  3.875000   3.875000   4.000000
+3        1  target  0.528899  44.853611  42.331581
+4        1   other  0.568605  48.228085  45.227810
+5        1    rank  3.250000   3.375000   3.500000
+results/MotionGAN/FaceAnalysis0118_ae_euc/transfer/iter_100000
+   content   style        l2        dtw       ddtw
+0        0  target  0.522264  44.420669  41.606566
+1        0   other  0.556453  47.146715  44.265427
+2        0    rank  3.625000   3.625000   4.000000
+3        1  target  0.505085  43.137498  39.879575
+4        1   other  0.543725  46.334582  42.932493
+5        1    rank  3.375000   3.250000   3.500000
+results/MotionGAN/FaceAnalysis0125_p2p/transfer/iter_40000/
+   content   style        l2        dtw       ddtw
+0        0  target  0.441553  38.789057  36.013440
+1        0   other  0.482797  42.059164  39.213170
+2        0    rank  4.125000   4.125000   3.875000
+3        1  target  0.429842  38.002065  35.324769
+4        1   other  0.476942  41.566142  38.722416
+5        1    rank  3.375000   3.625000   3.625000

@@ -13,6 +13,7 @@ from core.statistics.tSNE import apply_tSNE
 from core.statistics.pca import apply_pca
 from core.statistics.distance_heatmap import draw_heatmap
 
+import pathlib
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
@@ -51,7 +52,16 @@ def main():
 
     ## Set up generator network
     num_class = len(cfg.train.dataset.class_list)
-    gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class).to(device)
+
+    if hasattr(cfg.train.dataset, "pca_root"):
+        pca_root = pathlib.Path(cfg.train.dataset.pca_root)
+        pca_mean = np.load(pca_root / "mean.npy")
+        pca_components = np.load(pca_root / "components.npy")
+        pca_mean = torch.Tensor(pca_mean).to(device)
+        pca_components = torch.Tensor(pca_components).to(device)
+        gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class, pca_mean, pca_components).to(device)
+    else:
+        gen = getattr(models, cfg.models.generator.model)(cfg.models.generator, num_class).to(device)
 
 
 

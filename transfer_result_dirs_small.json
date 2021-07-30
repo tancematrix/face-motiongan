@@ -1,0 +1,8 @@
+[
+    "results/hosvd/",
+    "results/MotionGAN/FaceAnalysis0118_ae/transfer/iter_100000",
+    "results/MotionGAN/FaceAnalysis0118_ae_input27/transfer/iter_100000",
+    "results/MotionGAN/FaceAnalysis0125_p2p/transfer/iter_40000",
+    "results/MotionGAN/FaceAnalysis0118_ae_input204_2/transfer/iter_50000",
+    "results/MotionGAN/FaceAnalysis0125_linear_ae/transfer/iter_50000"
+]

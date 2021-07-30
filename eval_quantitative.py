@@ -143,12 +143,12 @@ def main():
         os.makedirs(result_dir)
 
     
-    ## Testing option
-    standard_bvh = cfg.test.dataset.standard_bvh if hasattr(cfg.test.dataset, 'standard_bvh') else 'core/datasets/CMU_standard.bvh'
-    skelton, _, joints_to_index, _ = get_standard_format(standard_bvh)
-    _, non_zero_joint_to_index = cut_zero_length_bone(skelton, joints_to_index)
-    id_rightleg = non_zero_joint_to_index['RightToeBase'] 
-    id_leftleg = non_zero_joint_to_index['LeftToeBase']     
+    # ## Testing option
+    # standard_bvh = cfg.test.dataset.standard_bvh if hasattr(cfg.test.dataset, 'standard_bvh') else 'core/datasets/CMU_standard.bvh'
+    # skelton, _, joints_to_index, _ = get_standard_format(standard_bvh)
+    # _, non_zero_joint_to_index = cut_zero_length_bone(skelton, joints_to_index)
+    # id_rightleg = non_zero_joint_to_index['RightToeBase'] 
+    # id_leftleg = non_zero_joint_to_index['LeftToeBase']     
 
     
 

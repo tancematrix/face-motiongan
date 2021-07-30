@@ -29,7 +29,7 @@ train = dict(
 
     # Dataset
     dataset=dict(
-        data_root = './data/train_jp/CMU_jp_new/Styled_jp/Walk_jp',
+        data_root = './walk-style-data',
         class_list = ['Cat', 'Chicken', 'Dinosaur', 'Drunk', 'GanglyTeen', 'GracefulLady', 'Normal', 'OldMan','SexyLady', 'StrongMan','Childish', 'Clumsy', 'Cool', 'Depressed', 'Elated', 'Elderlyman', 'Happy', 'Joy', 'Lavish', 'Marching', 'Painfulleftknee', 'Relaxed', 'Rushed', 'Sad', 'Scared', 'Sexy', 'Shy', 'Sneaky'],
         start_offset = 1,
         control_point_interval = 256,
@@ -71,7 +71,7 @@ train = dict(
 test = dict(
     out = 'results/MotionGAN/Styled_augfps_step8',
     dataset=dict(
-        data_root = './data/test_jp/CMU_jp_new/Locomotion_jp/walking_jp',
+        data_root = 'data/test_jp/CMU_jp_new/Locomotion_jp/walking_jp/',
         class_list = [],
         start_offset = 1,
         control_point_interval = 256,

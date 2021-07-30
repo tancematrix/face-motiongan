@@ -14,9 +14,9 @@ import core.utils.bvh_to_joint as btoj
 
 
 class BVHDataset(Dataset):
-    def __init__(self, cfg, mode='train'):
+    def __init__(self, cfg, mode='train', from_paths=None):
         self.cfg = cfg
-        self.datalist, self.indexes = collect_motion_datalist(cfg, mode=mode)
+        self.datalist, self.indexes = collect_motion_datalist(cfg, mode=mode, npy_paths=from_paths)
         self.mode = mode
 
     def __len__(self):
@@ -77,7 +77,7 @@ class BVHDataset(Dataset):
             # Get trajectory from motion
             trajectory = data['motion'][start_frame:start_frame+self.cfg.frame_nums,:3].copy()
             # Sampling control signal
-            control_part = motion_utils.sampling(trajectory, data['spline_f'], data['spline_length_map'], 1.0, startT=0, endT=self.cfg.frame_nums, step=self.frame_step, with_noise=True)
+            control_part = motion_utils.sampling(trajectory, data['spline_f'], data['spline_length_map'], 1.0, startT=0, endT=self.cfg.frame_nums, step=self.cfg.frame_step, with_noise=True)
             # control_part[:,1] = control_part[:,1] - control_part[:,1]
 
 
@@ -95,21 +95,22 @@ class BVHDataset(Dataset):
 
 
 
-def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
+def collect_motion_datalist(cfg, sampling_interval=3, mode='train', npy_paths=None):
 
     # Collect .npy path
-    npy_paths = []
-    for (root, dirs, files) in os.walk(cfg.data_root):
-        for npy_dir in dirs:
-            if npy_dir.find('spline') > -1:
-                continue
-            npy_paths.extend(glob.glob(os.path.join(root, npy_dir, '*.npy')))
-        if not npy_paths:
-            for npy_file in files:
-                if npy_file.endswith('.npy'):
-                    npy_paths.append(os.path.join(root, npy_file))
-    if mode == 'test':
-        npy_paths.sort()
+    if npy_paths is None:
+        npy_paths = []
+        for (root, dirs, files) in os.walk(cfg.data_root):
+            for npy_dir in dirs:
+                if npy_dir.find('spline') > -1:
+                    continue
+                npy_paths.extend(glob.glob(os.path.join(root, npy_dir, '*.npy')))
+            if not npy_paths:
+                for npy_file in files:
+                    if npy_file.endswith('.npy'):
+                        npy_paths.append(os.path.join(root, npy_file))
+        if mode == 'test':
+            npy_paths.sort()
 
 
     datalist = []
@@ -153,7 +154,9 @@ def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
             if data is None: continue
         else:
             data = create_data_from_processed_npy(cfg, npy_path, data_path)
-            if data is None: continue
+            if data is None:
+                print("ignore one file for some err.")
+                continue
 
         # Register label info
         data['label'] = label
@@ -164,6 +167,8 @@ def collect_motion_datalist(cfg, sampling_interval=3, mode='train'):
                 datalist.append(data)
                 for j in range((data['motion'].shape[0] - cfg.frame_nums) // sampling_interval):
                     indexes.append(tuple((motion_count, j * sampling_interval)))
+            else:
+                continue
         else:
             datalist.append(data)
             indexes.append(tuple((motion_count, 0)))

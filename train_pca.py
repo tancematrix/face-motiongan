@@ -244,7 +244,7 @@ def train_loop(train_loader,
     _lam_g_adv = cfg.train.parameters.lam_g_adv
     _lam_g_trj = cfg.train.parameters.lam_g_trj
     _lam_g_cls = cfg.train.parameters.lam_g_cls
-    _lam_g_cons = 0
+    _lam_g_cons = cfg.train.parameters.lam_g_cons
     _lam_g_bone = cfg.train.parameters.lam_g_bone if hasattr(cfg.train.parameters, 'lam_g_bone') else 0
     _lam_d_adv = cfg.train.parameters.lam_d_adv
     _lam_d_gp = cfg.train.parameters.lam_d_gp if cfg.train.GAN_type in ['wgan-gp', 'r1'] else 0
@@ -295,22 +295,31 @@ def train_loop(train_loader,
         # n_joints = (x_data.shape[3]-6)//3
         n_joints = 68
 
+
         # Convert root trajectory to velocity
         gt_rotation = x_data[:,:,:,0:3]
         gt_bias = x_data[:,:,:,3:6]
         gt_trajectory = x_data[:,:,:,6:9]
-        control = gt_trajectory.to(device)#.unsqueeze(1).type(torch.FloatTensor)
+        input_dim = cfg.models.generator.input_dim if hasattr(cfg.models.generator, 'input_dim') else 3
         gt_motion = x_real[:,:,:,6:]
         gt_motion = torch.matmul(gt_motion, pca_components) + pca_mean
+        if input_dim == 3:
+            control = gt_trajectory.to(device)#.unsqueeze(1).type(torch.FloatTensor)
+            v_control = control[:,:,1:,] - control[:,:,:-1,:]
+            v_control = F.pad(v_control, (0,0,1,0), mode='reflect')
+            v_control = Variable(v_control).to(device) 
+        elif input_dim == 27:
+            v_control = x_real[:,:,:,6:]
+        elif input_dim == 204:
+            v_control = gt_motion
+        else:
+            raise ValueError("invalid input ndim")
         # gt_v_trajectory = gt_trajectory[:,:,1:,:] - gt_trajectory[:,:,:-1,:]
         # gt_v_trajectory = F.pad(gt_v_trajectory, (0,0,1,0), mode='reflect')
         # gt_v_trajectory = Variable(gt_v_trajectory).to(device)
         # import pdb; pdb.set_trace()
 
         # Convert control curve to velociry
-        v_control = control[:,:,1:,] - control[:,:,:-1,:]
-        v_control = F.pad(v_control, (0,0,1,0), mode='reflect')
-        v_control = Variable(v_control).to(device) 
         gt_v_trajectory = v_control
 
 
@@ -330,12 +339,12 @@ def train_loop(train_loader,
         
         ### Forward Generator
         fake_rot, fake_bias, x_fake = gen(v_control, z, fake_label)
-        fake_motion = torch.matmul(x_fake, pca_components) + pca_mean
+        fake_motion = torch.matmul(x_fake, pca_components) # + pca_mean
 
         fake_trajectory = x_fake[:,:,:,:3]
-        fake_v_trajectory = fake_trajectory[:,:,1:,:] - fake_trajectory[:,:,:-1,:]
-        fake_v_trajectory = F.pad(fake_v_trajectory, (0,0,1,0), mode='reflect')
-        fake_v_trajectory = Variable(fake_v_trajectory).to(device)
+        # fake_v_trajectory = fake_trajectory[:,:,1:,:] - fake_trajectory[:,:,:-1,:]
+        # fake_v_trajectory = F.pad(fake_v_trajectory, (0,0,1,0), mode='reflect')
+        # fake_v_trajectory = Variable(fake_v_trajectory).to(device)
 
         loss_collector = {}
         
@@ -346,10 +355,10 @@ def train_loop(train_loader,
             # Forward Discriminator
             # np.save("../face-transform/face_analysis/train_example.npy", np.array(x_data.cpu()))
 
-            _x_real = rotate(gt_motion, gt_rotation, gt_bias, device=device)
+            _x_real = gt_motion - pca_mean #rotate(gt_motion, gt_rotation, gt_bias, device=device)
             # np.save("../face-transform/face_analysis/train_example_rot.npy", np.array(_x_real.cpu()))
             # raise ValueError("終わるよ")
-            _x_fake = rotate(fake_motion, fake_rot, fake_bias, device=device)
+            _x_fake = fake_motion # rotate(fake_motion, fake_rot, fake_bias, device=device)
             # np.save("../face-transform/face_analysis/train_example_fake.npy", x_fake.detach().cpu().numpy())
             # from IPython import embed; embed()
             # d_fake_adv, d_fake_cls = dis(torch.cat((fake_v_trajectory.repeat(1,1,1,n_joints).detach(),
@@ -358,9 +367,12 @@ def train_loop(train_loader,
             # d_real_adv, d_real_cls = dis(torch.cat((gt_v_trajectory.repeat(1,1,1,n_joints).detach(),
             #                                         _x_real),
             #                                         dim=1))
-            d_fake_adv, d_fake_cls = dis(_x_fake.detach())
-            d_real_adv, d_real_cls = dis(_x_real)
-
+            if cfg.models.discriminator.use_pca:
+                d_fake_adv, d_fake_cls = dis(x_fake.detach())
+                d_real_adv, d_real_cls = dis(x_real)
+            else:
+                d_fake_adv, d_fake_cls = dis(_x_fake.detach())
+                d_real_adv, d_real_cls = dis(_x_real)
             # GAN loss
             if cfg.train.GAN_type == 'ls' or cfg.train.GAN_type == 'normal':
                 fake_target = fake_target.expand_as(d_fake_adv)
@@ -401,38 +413,29 @@ def train_loop(train_loader,
         g_loss = 0
 
         if _lam_g_cons > 0:
-            # shape = gt_motion.shape
-            # gt_motion = gt_motion.reshape(*shape[:-1], 68, 3)
-            # x_fake = x_fake.reshape(*shape[:-1], 68, 3)
-            # _x_real = _x_real.reshape(*shape[:-1], 68, 3)
-            # _x_fake = _x_fake.reshape(*shape[:-1], 68, 3)
-            gt_residual = gt_motion - torch.mean(gt_motion, -2, keepdim=True)
-            fake_residual = x_fake - torch.mean(gt_motion, -2, keepdim=True)
-            _lam_patience = 5.
-            g_cons_loss = torch.var(fake_residual) - _lam_patience*torch.var(gt_residual)
-            g_cons_loss = _lam_g_cons * torch.relu(g_cons_loss)
-            loss_collector["g_cons_loss"] = g_cons_loss.item()
+            cons_rot, cons_bias, x_cons = gen(v_control, z, real_label)
+            # bs = x_cons.shape[0]
+            cons_motion = torch.matmul(x_cons, pca_components)#.view(bs, -1, 68, 3) # べたがき
+            # _x_real = _x_real.view(bs, -1, 68, 3)
 
-            gt_residual_rot = _x_real - torch.mean(gt_motion, -2, keepdim=True)
-            fake_residual_rot = _x_fake - torch.mean(gt_motion, -2, keepdim=True)
-            _lam_patience = 5.
-            g_cons_loss_rot = torch.var(fake_residual_rot) - _lam_patience*torch.var(gt_residual_rot)
-            g_cons_loss_rot = _lam_g_cons * torch.relu(g_cons_loss_rot)
-            loss_collector["g_cons_loss_rot"] = g_cons_loss_rot.item()
-            g_loss += g_cons_loss_rot
-            # from IPython import embed; embed()
-
-
-
+            def criterion_3d(a, b):
+                dist = a - b
+                dist = dist ** 2
+                dist = torch.sqrt(dist.sum(dim=-1))
+                return dist.mean()
+            g_cons_loss = _lam_g_cons * base_criterion(cons_motion, _x_real)
+            loss_collector['g_cons_loss'] = g_cons_loss.item()
             g_loss += g_cons_loss
-
         # GAN loss
         if _lam_g_adv > 0:
-            _x_fake = rotate(fake_motion, fake_rot, fake_bias, device=device)
+            _x_fake = fake_motion #rotate(fake_motion, fake_rot, fake_bias, device=device)
             # d_fake_adv, d_fake_cls = dis(torch.cat((fake_v_trajectory.repeat(1,1,1,n_joints),
             #                                         _x_fake),
             #                                        dim=1))
-            d_fake_adv, d_fake_cls = dis(_x_fake)
+            if cfg.models.discriminator.use_pca:
+                d_fake_adv, d_fake_cls = dis(x_fake)
+            else:
+                d_fake_adv, d_fake_cls = dis(_x_fake)
 
             if cfg.train.GAN_type == 'ls' or cfg.train.GAN_type == 'normal':
                 g_adv_loss = _lam_g_adv * GAN_criterion(d_fake_adv, real_target)
@@ -471,7 +474,7 @@ def train_loop(train_loader,
         # Note that bone loss cannot be used with meanstd normalization because its break constraint
         if _lam_g_bone > 0:
             fake_bones_norm = get_bones_norm(x_fake, bones)
-            g_bone_loss = _lam_g_bone * base_criterion(fake_bones_norm, target_bones_norm.expand_as(fake_bones_norm))
+            g_bone_loss = _lam_g_bone * BCE_criterion(fake_bones_norm, target_bones_norm.expand_as(fake_bones_norm))
             g_loss += g_bone_loss
             loss_collector['g_bone_loss'] = g_bone_loss.item()
 
@@ -529,7 +532,7 @@ def train_loop(train_loader,
             gen.eval()
             # Generate multiple samples
             preview_list = []
-            preview_list.append({'caption': 'real', 'motion': _x_real[:1,:,:].cpu(), 'control': control.data.cpu()[:1,:,:,:], 'rotation': x_data[:1,:,:,3:6].cpu()})
+            preview_list.append({'caption': 'real', 'motion': (gt_motion+pca_mean)[:1,:,:].cpu(), 'rotation': x_data[:1,:,:,3:6].cpu()})
             for k in range(3):
                 z = Variable(gen.make_hidden(1, x_data.shape[2])).to(device) if cfg.models.generator.use_z else None
                 fake_label = torch.randint(0, len(class_list), size=(1,)).type(torch.LongTensor).to(device)
@@ -538,8 +541,8 @@ def train_loop(train_loader,
                 fake_motion = torch.matmul(x_fake, pca_components) + pca_mean
                 # fake_trajectory = reconstruct_v_trajectory(fake_v_trajectory.data.cpu()[:1,:,:,:], gt_trajectory[:1,:,:1,:])
                 caption = cfg.train.dataset.class_list[fake_label[0].cpu().numpy()]
-                x_fake = rotate(fake_motion, fake_rot, fake_bias, device=device)
-                preview_list.append({'caption': caption, 'motion':x_fake.data.cpu()[:1,:,:,:], 'control': control.data.cpu()[:1,:,:,:], 'rotation':fake_rot[:1,:,:,:].cpu()})
+                x_fake = fake_motion #rotate(fake_motion, fake_rot, fake_bias, device=device)
+                preview_list.append({'caption': caption, 'motion':x_fake.data.cpu()[:1,:,:,:], 'rotation':fake_rot[:1,:,:,:].cpu()})
                 
             preview_path = os.path.join(cfg.train.out, 'preview', f'iter_{iteration+i+1}.pkl')
             # print(preview_path)

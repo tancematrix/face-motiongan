@@ -31,9 +31,9 @@ train = dict(
 
     # Dataset
     dataset=dict(
-        data_root = '/home/takeuchi/data/RAVDESS_processed/train',
+        data_root = '/home/takeuchi/data/RAVDESS_processed/EmotionData/train',
         multi_class = True,
-        class_list = ["01-0{}-0{}-0{}-0{}-0{}-{:02}".format(*nums) for nums in __itertools.product([1,2],[1,2,3,4,5,6,7,8],[1,2],[1,2],[1,2],list(range(1,25)))],
+        class_list = ["neutral", "calm", "happy", "sad", "angry", "fearful", "disgust", "surprised"],
         start_offset = 1,
         control_point_interval = 8,
         standard_bvh = None,

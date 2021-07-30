@@ -1,5 +1,3 @@
-import itertools as __itertools
-
 # Models
 models = dict(
     generator = dict(
@@ -27,21 +25,20 @@ train = dict(
     batchsize = 24,
     num_workers = 16,
     total_iterations = 200000,
-    out = 'results/MotionGAN/FaceAnalysis0721',
+    out = 'results/MotionGAN/Styled_augfps_step8',
 
     # Dataset
     dataset=dict(
-        data_root = '/home/takeuchi/data/RAVDESS_processed/train',
-        multi_class = True,
-        class_list = ["01-0{}-0{}-0{}-0{}-0{}-{:02}".format(*nums) for nums in __itertools.product([1,2],[1,2,3,4,5,6,7,8],[1,2],[1,2],[1,2],list(range(1,25)))],
+        data_root = '',
+        class_list = ['Cat', 'Chicken', 'Dinosaur', 'Drunk', 'GanglyTeen', 'GracefulLady', 'Normal', 'OldMan','SexyLady', 'StrongMan','Childish', 'Clumsy', 'Cool', 'Depressed', 'Elated', 'Elderlyman', 'Happy', 'Joy', 'Lavish', 'Marching', 'Painfulleftknee', 'Relaxed', 'Rushed', 'Sad', 'Scared', 'Sexy', 'Shy', 'Sneaky'],
         start_offset = 1,
-        control_point_interval = 8,
-        standard_bvh = None,
+        control_point_interval = 256,
+        standard_bvh = 'core/datasets/CMU_standard.bvh',
         scale = 1.,
-        frame_nums = 64,
-        frame_step = 2,
+        frame_nums = 1024,
+        frame_step = 8,
         augment_fps = True,
-        rotate = False,
+        rotate = True,
     ),
 
     # Iteration intervals
@@ -55,10 +52,10 @@ train = dict(
     parameters=dict(
         g_lr = 0.0002,
         d_lr = 0.0001,
-        lam_g_adv = 5.,
+        lam_g_adv = 1.,
         lam_g_trj = 0.1,
         lam_g_cls = 5.,
-        lam_d_adv = 5.,
+        lam_d_adv = 1.,
         lam_d_cls = 5.,
     ),
 
@@ -71,15 +68,14 @@ train = dict(
 
 # Testing strategy
 test = dict(
-    out = 'results/MotionGAN/FaceAnalysis0721',
+    out = 'results/MotionGAN/Styled_augfps_step8',
     dataset=dict(
-        data_root = '/home/takeuchi/data/RAVDESS_processed/test',
+        data_root = 'data/test_jp/CMU_jp_new/Locomotion_jp/walking_jp/',
         class_list = [],
         start_offset = 1,
-        control_point_interval = 8,
-        standard_bvh = None,
+        control_point_interval = 256,
         scale = 1.,
-        frame_step = 2,
+        frame_step = 8,
     ),
     preview=dict(
         view_range = 50,
