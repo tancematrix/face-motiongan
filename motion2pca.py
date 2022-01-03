@@ -62,7 +62,7 @@ def main():
     
     if source_path.is_dir():
         files = list([f for f in source_path.glob("*.npy") if "rot" not in str(f)])
-    elif source_path.is_file() and source_path.suffix == ".":
+    elif source_path.is_file() and source_path.suffix == ".npy":
         files = [source_path]
     else:
         print("入力が間違っています。npyかディレクトリを指定してください")
