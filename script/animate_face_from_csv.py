@@ -3,7 +3,7 @@ import pathlib
 import numpy as np
 import pandas as pd
 import cv2
-from warp_face import animate_face, search_best_frame, npy_to_gif, clop_face
+from warp_face import animate_face, search_best_frame, npy_to_gif, clop_face, rotate
 
 
 
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("--source_mp4", "-m", type=str, action="store", required=True)
     parser.add_argument("--z", "-z", type=float, action="store", default=None)
     parser.add_argument("--title", type=str, action="store", default=None)
-    parser.add_argument("--out", type=str, action="store")
+    parser.add_argument("--out", type=str, action="store", default="trans.gif")
     args = parser.parse_args()
 
 
@@ -65,6 +65,6 @@ if __name__ == "__main__":
         movie_arr = [
             cv2.putText(frame, args.title, (0, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 0), 1, 4)
         for frame in movie_arr]
-    npy_to_gif(movie_arr, 'trans.gif')
+    npy_to_gif(movie_arr, args.out)
 
     

@@ -1,3 +1,7 @@
+大体の部分は以下のリポジトリからの借り物です。こちらのREADMEにも目を通していただくとありがたいです。
+
+https://github.com/B-Step62/pytorch-motiongan-open
+
 ## Requirement
 - Python3 (>=3.6)
 - Pytorch (>=0.4.1)
@@ -12,129 +16,96 @@
 
 
 ***
-# データセット作成
+# データセット
+RAVDESSデータセットに特殊化しています。
 
-bvhファイルは`{スタイルの名前}_*.npy`という名前で適当な場所に置いておく。  
-(CMUのStyled_Walkデータ：https://drive.google.com/open?id=1FyevwosIAghDoo7YLhtZ_wcmIgRHIyvZ ）  
-以下のスクリプトを実行すると、指定した場所に元のbvhファイルのコピーと、joint-positionに変換した動作のnpyファイルが生成される。
+(T, 68, 3): 時系列、3次元、68特徴点　です。
+
+
+# 各スクリプトの説明
+## データセットの準備
+PCAで圧縮したデータセットを作るためには以下の二つのスクリプトを走らせる必要があります。
+
+- openface2data.py
+openfaceのデータ（csv）からmotion部分のデータを取り出すスクリプト。`--use2d`フラグを付けると、二次元特徴点を出力する。そうでなければ三次元。以下では三次元を前提としています。
+
 ```
-python make_dataset.py --dataset {ROOT_OF_BVH_FILES} --out {OUTPUT_DIRECTORY}
-```
-また、正規化等に使用されるSkeleton情報は、デフォルトでは先頭のbvhファイルのものが参照されるが、コマンドラインオプション`--standard_bvh`で指定して任意のファイルを参照することもできる。
-
-### 学習用のPickleファイルの生成
-各npyファイルはあくまで動作のjoint positionの情報のみを持っており、学習に必要なスタイルラベルやSpline補間曲線等の情報は適切な前処理で取り出す必要がある。  
-この前処理は学習の設定に依存するため、Datasetインスタンスを生成する際に行う(core/datasets.dataset.py参照)が、学習の度に毎回行うにはやや重たい処理である。  
-そこで、前処理されたデータをPickleファイルで別々に保存しておき、同様の設定で学習する際はそれを読みだすようにしている。このPickleファイルは、npyファイルと同一の階層に作成される*processed_xxx*"というディレクトリ下に保存される。
-
-
-***
-# 学習
-モデルの学習は以下のコマンドにより実行する。
-```
-python train.py {PATH_TO_CONFIG_FILE}
-```
-**例**　
-```
-python train.py configs/MotionGAN/Styled_augfps_step8.py
-```
-特定のcheckpoint(.pth.tar)から学習を再開する場合、コマンドラインオプション`--resume`を用いて指定する。
-
-## Configファイルについて
-学習の設定は基本的に全てConfigファイルで扱う。  
-Configファイルは辞書の階層構造を取り、core/utils/config.pyに従ってパースされる。  
-代表的なプロパティについて説明を以下に載せる。
-
-### モデルの指定
-モデル情報はConfigファイルのmodelsプロパティに記載される。以下各プロパティの説明。
-
-**Generator**
-
-| プロパティ| 説明 |
-|:---:|:---|
-| model | ネットワークの名前　|
-| top | 最初のConv層の出力チャネル数 |
-| padding_mode | 各Conv層のパディング方法 |
-| kw | 各Conv層のKernelサイズ(幅) |
-| w_dim | Latent Transformerの出力次元数 |
-| use_z | ノイズzの生成方法 (ノイズを用いない場合None) |
-| z_dim | ノイズzの次元数 |
-| normalize_z | Latent Transformerの入力に対してPixelwiseNormalizationを適用するかどうか |
-
-**Discriminator**  
-Generatorと同様のものは省略。
-
-| プロパティ| 説明 |
-|:---:|:---|
-| norm | Normalizeレイヤを文字列で指定 |
-| use_sigmoid | Real/Fakeの出力にSigmoid層を挟むどうか |
-
-
-### データセットの指定
-学習に用いるデータセットはtrain.datasetプロパティで指定する、以下各プロパティの説明。
-| プロパティ| 説明 |
-|:---:|:---|
-| data_root | データセットの場所(root) |
-| class_list | データセットに含まれるスタイルクラス一覧 |
-| start_offset | 動作データをnpyファイルからロードする際，先頭でスキップするフレーム数 (キャリブレーション用のフレームなど) |
-| control_point_interval | Spline補間を行う際のコントロールポイントの間隔(フレーム数) |
-| standard_bvh | Skeleton情報を参照するbvhファイル |
-| scale | データに対してかけるスケーリングの係数 |
-| frame_nums | 学習に用いる1動作シーケンスのフレーム数  (これを↓のstepで割った長さがネットワークの入力長) |
-| frame_step | 動作をサンプリングするフレームステップ |
-| augment_fps | FPS Augmentationを行うかどうか |
-| rotate | y軸を中心とした回転Augmentationを行うかどうか |
-
-
-***
-# テスト
-test.pyを用いて、学習モデルを用いた動作生成テストを行うことができる。ただし、より自由な入力からの動作生成や定量評価・統計分析は後述専用のコードで行い、test.pyはどちらかというとValidationに近い目的で、特定のデータセット(∌学習データ)から抽出したControl Signalについて動作を生成するという簡単なテストのみを行う。  
-
-**実行コマンド**
-```
-python　test.py {PATH_TO_CONFIG_FILE} --weight {PATH_TO_CHECKPOINT} --num_samples {NUMBER_OF_SAMPLES_IN_A_VIDEO} 
-```
-**例**　
-```
-python test.py config/MotionGAN/Styled_augfps_step8.py --weight results/MotionGAN/Styled_augfps_step8/checkpoints/iter_99999.pth.tar --num_samples 3
+python openface2data.py --source OPENFACEの結果のcsvファイルが存在するディレクトリ --target 出力ディレクトリ
 ```
 
-Configファイルに関しては、学習と同じ形式で同一ファイル内にtestプロパティとして記載すればよい。
+- make_pca_dataset.py
+PCAによって次元圧縮を行う。このスクリプトはもともと書き捨てで、ちゃんと整理できていないです...すみません。
+PATHなどハードコードしています。大した処理はしていないのでコードを見てみてください、すみません。
 
-***
-# 分析
-analyze.pyでは学習したモデルの中間出力について、PCAやtSNEを用いた分析を行える。
-```
-python　analyze.py {PATH_TO_CONFIG_FILE} --weight {PATH_TO_CHECKPOINT} --mode {WHICH METHOD TO APPLY} --target {TARGET_FEATURE} ...
-``` 
-手法は`--mode`オプションで指定する。PCA・tSNEの他に、クラスタの重心間の距離行列をheatmapで可視化する"heatmap"というモードが指定できる。  
-`--target`オプションでは目的の中間出力(Latent Transformの出力**w**やAdaINの出力(層名で指定))を指定する。 
+## 学習
+- train.py, train_pca.py
 
-また、PCAとtSNEでは可視化したい主成分のペアを`--components`オプションでx-yの形で順に指定すると、それぞれに対応する複数のグラフが1つのファイルに出力される。  
-**例**　第1&2主成分、第2&3主成分、第3&4主成分を可視化したグラフを出力したい場合。
+学習を実行する。train_pca.pyは入力データがPCAによる変換データである場合（デフォルト）に使う。
+
+何が違うかというと、train_pca.pyの方はPCAの逆変換によって3次元データに復元してロスをとったりしている。
+
+学習の設定は`configs?MotionGAN/*.py`に記述する。train_pca.pyを使う場合、pca_rootという項目を設定しないといけない。pca_rootにはPCAの結果の主成分ベクトルと平均ベクトルを置く。
+
+実行例
 ```
-python　analyze.py {PATH_TO_CONFIG_FILE} --weight {PATH_TO_CHECKPOINT} --mode pca --target w --components 1-2,2-3,3-4
+python train_pca.py config/MotionGAN/FaseAnalysis.py
 ```
 
-<img src="asset/PCA_w.png" width="400px"> <img src="asset/centroid_heatmap.png" width="420px">
+## 生成
+- transfer.py, transfer_pca.py
+学習結果の重みを使って感情変換を行う。`--source_npy`で指定したファイル（任意の感情）を、学習時に存在した8感情それぞれに変換した結果がresult_dirに保存される。
 
-左：Latent Transformの出力**w**をPCAで可視化。　右：クラスタの重心の距離をheatmapで可視化。
+```
+python transfer_pca.py config/MotionGAN/FaseAnalysis.py --source_npy 変換元のnpyファイル --result_dir 結果格納ディレクトリ
+```
 
-*** 
-# 定量評価
-Trajectory errorやFoot skate distanceなどの指標を用いた定量評価を行うことができる。
-```
-python eval_quantitative.py {PATH_TO_CONFIG_FILE} --weight {PATH_TO_CHECKPOINT}
-```
-実行すると、Configで指定したテストデータについて評価を行い、結果のcsvが出力先フォルダの/eval/以下に保存される。
+`--source ディレクトリ名` でディレクトリ以下のnpyファイルをまとめて変換。（`--source_npy`とどちらかだけをつかう）
 
-***
-# Style Latent Vectorの探索
-style_search.pyでは最適化による動作からのスタイル推定を行う。  
-具体的には、対象の動作データ(.npyまたは.pkl)と学習済みモデルを指定すると、モデルの出力が対象動作に近くなるように、Latent Vector **w**そのものを最適化する。なお、最適化のハイパーパラメータはコード中で指定している。
-```
-python style_search.py {PATH_TO_CONFIG_FILE} --weight {PATH_TO_CHECKPOINT} --target {PATH_TO_TARGET_FILE} 
-```
-実行すると、PCAで圧縮した2次元平面上での最適化の軌跡を示したpdfが保存される。また、`--save_video`オプションをつけると、対象の動作・獲得したLatent Vectorに基づく生成動作・(対象のスタイルで生成した動作)を可視化した動画を生成できる。
+- sample_generation.py, sample_generation_pca.py
+transfer*.pyの原型です。多分使う必要はないです。
 
-<img src="asset/PCA_iter_2000_256-384.png" width="480px">
+## 評価
+参考までに。多分使わないと思います。
+
+- test.py
+テスト。竹内は使っていない（上記MotionGANを引き継いでおいてあるだけ）
+
+- classify.py
+ディスクリミネーターの評価スクリプト
+
+- hosvd.py
+Facial Expression Decomposition(https://ieeexplore.ieee.org/document/1238452)
+の再実装。比較のために用いた。
+
+- eval_transfer.py
+変換の結果の評価スクリプト。変換前後の距離の比較など。必要があったら竹内に聞いてください。結局ボツにした評価結果で、使わなくていいと思います。
+
+
+# 動画生成
+ここまでで扱ってきたデータは点群だった。点群で表されるmotionデータを元に、動画の感情変換をするスクリプトは`script/`以下にまとまっている。
+
+warp_face.py, animate_face_from_csv.pyが本体。
+
+もともとの動画の各フレームについて、そのフレームの特徴点座標（二次元）->変換後のmotionデータの特徴点座標（二次元）というワーピングを施す。
+
+warp_face.pyがワーピングのライブラリ的な位置づけで、実行するのはanimate_face_from_csv.py
+
+```
+python animate_face_from_csv.py -s SOURCE_CSV -t TARGET_NPY -m SOURCE_MP4 --title TITLE --out OUT_FILENAME
+```
+
+SOURCE_CSV: SOURCE_MP4に対応する、openfaceの結果のcsv
+
+SOURCE_MP4: 変換前動画
+
+TARGET_NPY: 変換後のmotionデータ
+
+TITLE: 変換後の動画のキャプション（不要ならつけない）
+
+OUT: 出力ファイルのパス
+
+なお、animate_face.pyは古いバージョン。入力として、source_npy（PCAによる圧縮をする前のT, 68, 3次元のnpyデータ）、source_img（source_mp4のうち適当な１フレームを画像として出力したもの）を指定する。
+
+一枚の画像をワーピングで動かすのがanimate_face.pyで、動画の各フレームを動かすのがanimate_face_from_csv.py
+
+ファイル名が悪いのは見逃してください...
